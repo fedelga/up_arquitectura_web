@@ -1,125 +1,152 @@
 const express = require('express');
-const app = express();
+const router = express.Router();
+const data = require('./data'); // Importamos los datos de memo de data.js
 
 
-    // Recursos el softw del restaurante
+const { reservas, menus, criticas } = require('./data'); // Data para acceder a memo
+
+
+// // // RECURSOS
 
 // Crear una nueva reserva
-app.post('/reservas', (request, response) => 
-{
-    response.send('Crear una nueva reserva');
+router.post('/reservas', (req, res) => {
+    const nuevaReserva = {
+        id: reservas.length + 1, // Generar un ID basado en la longitud del array
+        fecha: req.body.fecha,
+        hora: req.body.hora,
+        personas: req.body.personas,
+        nombre: req.body.nombre
+    };
+    reservas.push(nuevaReserva);
+    res.status(201).json(nuevaReserva);
 });
 
-// Obtener todas las reservas
-app.get('/reservas', (request, response) => 
-{
-    response.send('Obtener todas las reservas');
+// Obtener todas las reservas c/ filtro
+router.get('/reservas', (req, res) => {
+    const { fecha, hora, personas } = req.query;
+    if (fecha || hora || personas) {
+        let resultados = reservas.filter(reserva => {
+            return (!fecha || reserva.fecha === fecha) &&
+                   (!hora || reserva.hora === hora) &&
+                   (!personas || reserva.personas === parseInt(personas));
+        });
+        res.json(resultados);
+    } else {
+        res.json(reservas);
+    }
 });
 
-// Modificar una reserva existente
-app.put('/reservas/:id', (request, response) => 
-{
-    const { id } = request.params;
-    response.send(`Modificar la reserva con ID ${id}`);
+// Modificar una reserva existente, sino error
+router.put('/reservas/:id', (req, res) => {
+    const { id } = req.params;
+    let reserva = reservas.find(r => r.id === parseInt(id));
+    if (reserva) {
+        reserva.fecha = req.body.fecha || reserva.fecha;
+        reserva.hora = req.body.hora || reserva.hora;
+        reserva.personas = req.body.personas || reserva.personas;
+        reserva.nombre = req.body.nombre || reserva.nombre;
+        res.json(reserva);
+    } else {
+        res.status(404).send('Reserva no encontrada.');
+    }
 });
 
-// Cancelar una reserva
-app.delete('/reservas/:id', (request, response) => 
-{
-    const { id } = request.params;
-    response.send(`Cancelar la reserva con ID ${id}`);
+// Cancelar una reserva, sino error
+router.delete('/reservas/:id', (req, res) => {
+    const { id } = req.params;
+    const index = reservas.findIndex(r => r.id === parseInt(id));
+    if (index !== -1) {
+        reservas.splice(index, 1);
+        res.status(204).send('Reserva cancelada exitosamente.');
+    } else {
+        res.status(404).send('Reserva no encontrada.');
+    }
 });
-
-
 
 // Obtener la disponibilidad de mesas
-app.get('/disponibilidad', (request, response) => 
-{
-    response.send('Ver disponibilidad de mesas');
-});
-
-// Actualizar la disponibilidad de mesas
-app.put('/disponibilidad', (request, response) => 
-{
-    response.send('Actualizar disponibilidad de mesas');
+router.get('/mesas/disponibilidad', (req, res) => {
+    res.json({ disponibles: Math.floor(Math.random() * 100) + 1 });      //Random asi no creo mil en memo
 });
 
 
-/*
-let reservas = [
-    { id: 1, fecha: '2024-05-01', hora: '19:00', personas: 2, nombre: 'Juancito Perez' },
-    { id: 2, fecha: '2024-06-19', hora: '20:00', personas: 4, nombre: 'Toni Gambino'},
-    { id: 3, fecha: '2024-02-02', hora: '21:00', personas: 3, nombre: 'Eduardo Casanova' }
-];
-*/
 
-// Ruta para buscar reservas con filtros
-app.get('/reservas/busqueda', (request, response) => 
-{
-    const { fecha, hora, personas } = request.query;
+
+
+// // // SUBRECURSOS
+
+// Obtener el menú del restaurante
+router.get('/menu', (req, res) => {
+    if (menus.length > 0) {
+        res.json(menus);
+    } else {
+        res.status(404).send('No se encontraron menús.');
+    }
+});
+
+// Añadir una reseña a un restaurante
+router.post('/criticas', (req, res) => {
+    const { autor, comentario, calificacion } = req.body;
+
+    // SOLO si existe una reserva para el autor, sino error
+    const reservaExistente = reservas.some(reserva => reserva.nombre === autor);
+    if (reservaExistente) {
+        const nuevaCritica = { autor, comentario, calificacion };
+        criticas.push(nuevaCritica);
+        res.status(201).json(nuevaCritica);
+    } else {
+        res.status(403).send('No se encontró una reserva válida para este autor.');
+    }
+});
+
+// Obtener todas las criticas
+router.get('/criticas', (req, res) => {
+    res.json(criticas);
+});
+
+// Promediar estadisticas
+router.get('/criticas/estadisticas', (req, res) => {
+    let sumaCalificaciones = 0;
+    let cantidadCriticas = criticas.length;
     
-    // Filtro reservas segun los parametros del get
-    let resultados = reservas.filter(reserva => 
-    {
-        return (!fecha || reserva.fecha === fecha) &&
-               (!hora || reserva.hora === hora) &&
-               (!personas || reserva.personas === parseInt(personas));
+    criticas.forEach(critica => {
+        sumaCalificaciones += critica.calificacion;
     });
 
-    // Devuelvo reservas filtradas
-    response.json(resultados);
+    let promedioCalificaciones = cantidadCriticas > 0 ? (sumaCalificaciones / cantidadCriticas).toFixed(2) : 0;
+
+    res.json({
+        cantidadCriticas: cantidadCriticas,
+        promedioCalificaciones: promedioCalificaciones
+    });
 });
 
 
 
-    // Subrecurso para reservas de grupos
+
+/* DEJO SIN USAR
 
 // Crear una reserva para un grupo
-app.post('/reservas/grupos', (request, response) => 
-{
-    response.send('Crear una reserva para un grupo');
+router.post('/reservas/grupos', (req, res) => {
+    res.send('Crear una reserva para un grupo');
 });
 
 // Obtener todas las reservas de grupos
-app.get('/reservas/grupos', (request, response) => 
-{
-    response.send('Obtener todas las reservas de grupos');
+router.get('/reservas/grupos', (req, res) => {
+    res.send('Obtener todas las reservas de grupos');
 });
 
-
-
-    // Subrecursos para los menús del restaurante
-
-// Obtener el menú del restaurante
-app.get('/restaurantes/:restauranteId/menu', (request, response) => 
-{
-    const { restauranteId } = request.params;
-    response.send(`Obtener el menú del restaurante con ID ${restauranteId}`);
+// Actualizar la disponibilidad de mesas
+router.put('/mesas/disponibilidad', (req, res) => {
+    res.send('Disponibilidad de mesas actualizada.');
 });
 
 // Actualizar el menú del restaurante
-app.put('/restaurantes/:restauranteId/menu', (request, response) => 
-{
-    const { restauranteId } = request.params;
-    response.send(`Actualizar el menú del restaurante con ID ${restauranteId}`);
+router.put('/restaurantes/:restauranteId/menu', (req, res) => {
+    const { restauranteId } = req.params;
+    res.send(`Actualizar el menú del restaurante con ID ${restauranteId}`);
 });
 
+*/
 
 
-    // Subrecursos para las criticas y calificaciones de los clientes
-
-// Añadir una reseña a un restaurante
-app.post('/restaurantes/:restauranteId/criticas', (request, response) => 
-{
-    const { restauranteId } = request.params;
-    response.send(`Añadir reseña al restaurante con ID ${restauranteId}`);
-});
-
-// Obtener reseñas de un restaurante
-app.get('/restaurantes/:restauranteId/criticas', (request, response) => 
-{
-    const { restauranteId } = request.params;
-    response.send(`Obtener reseñas del restaurante con ID ${restauranteId}`);
-});
-
-
+module.exports = router; // Exportar los url
